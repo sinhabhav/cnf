@@ -1,0 +1,261 @@
+'''CNF CONVERTER '''
+import sys
+	
+inputFile = open(sys.argv[2])
+
+'''This function will solve deMorgans Law '''
+def applyDeMorgans(prop):
+    result = []
+    if(isinstance(prop,str)):
+        result = prop
+    else:
+        if (prop[0] == "not"):
+            if(isinstance(prop[1],str)):
+				result = prop
+            else:
+                op = prop[1][0]
+                if(op=="not"):
+                    result = applyDeMorgans(prop[1][1])
+                    return result  
+                else:
+                    if(op=="and"):
+                        op="or"
+                    else:
+                        op="and"
+                    result = [op]
+                    for p in prop[1][1:]:
+                        if isinstance(p, str):
+                            r1 = ["not", p]
+                            result.append(r1)
+                        if isinstance(p, list):
+                            r1 = applyDeMorgans(["not", p])
+                            result.append(r1)
+                   
+                    return result					
+                    
+        else:
+            result = []         
+            for p in prop:
+                result.append(applyDeMorgans(p))
+            return result
+    return result
+
+'''This function solves => '''
+def applyImplies(prop):
+    result = []
+    if isinstance(prop, str):
+        return prop
+    if prop[0] == "implies":
+        r1 = ["not", applyImplies(prop[1])]
+        r2 = applyImplies(prop[2])
+        result = ["or", r1, r2]
+    else:
+        for p in prop:
+            result.append(applyImplies(p))
+    return result
+	
+'''This function solves <=> '''
+def applyBiconditional(prop):
+    result = []
+    if(isinstance(prop, str)):
+        return prop
+    if(prop[0]=="iff"):
+        r1 = applyBiconditional(prop[1])
+        r2 = applyBiconditional(prop[2])
+        result = ["and", ["implies", r1, r2],["implies", r2, r1]]
+    else:
+        for p in prop:
+            result.append(applyBiconditional(p))
+    return result
+
+
+'''This function removes unwanted "not" '''	
+def applyDoubleNegation(prop):
+    result = []
+    if (isinstance(prop, str)):
+        return prop
+    if prop[0] == "not" :
+        if (isinstance(prop[1], list)) and prop [1][0] == "not":
+            result = applyDoubleNegation(prop[1][1])
+            return result
+    for p in prop:
+        result.append(applyDoubleNegation(p))
+    return result	
+
+''' This function applies distributive law'''
+def applyDistributive(prop):
+    result = []
+    if (isinstance(prop, str)):
+        return prop
+    if isinstance(prop, list) and len(prop)==2: 
+        return prop
+    if(prop[0] == "or"):
+        if len(prop) ==3 :
+            r1 = prop[1]
+            r2 = prop[2]
+            if(isinstance(prop[1], list)) and (isinstance(prop[2], list))and prop[1][0]=="and" and prop[2][0]=="and":
+                result =["and"]
+                for p in prop[1][1:]:
+                    r = applyDistributive(distributeOr(applyDistributive(p), prop[2]))
+                    if (isinstance(r, str)):
+                        result.append(r)
+                    else:
+                        result= result+r
+                return result
+            if (isinstance(r1,str) and isinstance(r2, str)):
+                return prop
+            if isinstance(prop[2],list) and prop[2][0]=="and":   
+                result=["and"]
+                result = result + applyDistributive(distributeOr(prop[1], prop[2]))
+                return result
+            if isinstance(prop[1],list) and prop[1][0]=="and":    
+                result=["and"]
+                result = result + applyDistributive(distributeOr(prop[2], prop[1]))
+                return result
+            r3 = applyDistributive(prop[1])
+            r4 = applyDistributive(prop[2])
+            result = [prop[0],r3,r4]
+            return result
+        if len(prop) >3:
+            arg1 = applyDistributive( prop[1])
+            for arg2 in prop[2:]:
+                arg1 = applyDistributive(["or", (arg1), applyDistributive(arg2)])
+            result = arg1
+            return result
+    else:
+        for p in prop:
+            result.append(applyDistributive(p))
+
+    return result		
+            
+'''This function acts as a helper to the applyDistributive function, here the actual distribution occurs'''   
+def distributeOr(prop1, prop2):
+    res=[]
+    for r in prop2[1:]:
+        res.append(applyDistributive(["or", prop1,applyDistributive(r)]))
+    return res
+
+'''This function applies associative law'''
+def applyAssociative(prop):
+    op = prop[0]
+    if(isinstance(prop, str)):
+        return prop
+    flag = True
+    result = [op]
+    for p in prop[1:]:
+        if(isinstance(applyAssociative(p),list) and p[0] == op):
+            r1 = applyAssociative(p)
+            result = result + r1[1:]
+        else:
+            result.append(applyAssociative(p))
+    return result
+            
+'''This function removes the duplicates present'''	 
+def removeDuplicates(prop):
+    result = []
+    dup = set()
+    if (isinstance(prop, str)):
+        return prop
+    if isinstance(prop, list) and len(prop)==2 and prop[0]=="not":
+        return prop
+    for p in prop:
+        result.append(removeDuplicates(p))
+    for i in range(0,len(result)-1):
+        if i == 0 and not(result[i]=="or" or result[i]=="and"):
+            return result
+        if i>0:
+            arg1 = set()
+            arg1 = formSet(result[i])
+            for j in range(i+1,len(result))	:
+                arg2 = formSet(result[j])
+                if arg1 == arg2:
+                    dup.add(j)
+    dupItems = sorted(list(dup))
+    
+    for i in xrange(len(dupItems), 0,-1):
+        toPop = int(dupItems[i-1])
+        result.pop(toPop)
+    return result
+    					
+'''This function acts as a helper to form a data structure of items present'''
+def formSet(prop):
+    if (isinstance(prop, str)):
+        return prop
+    if isinstance(prop, list) and len(prop)==2 and prop[0]=="not":
+        return prop[0]+prop[1]
+    resSet = set()
+    for p in prop:
+        if (isinstance(p, str)):
+            resSet.add(p)
+        if isinstance(p, list) and len(p)==2 and p[0]=="not":
+            resSet.add(p[0]+p[1])
+    return resSet
+
+'''This function modifies the output to make it in correct format'''	
+def minimize(prop):
+    result = []
+    if isinstance(prop, str):
+        return prop
+    if (isinstance(prop, list) and prop[0]=="not"):
+        return prop
+    if len(prop) == 2 and (prop[0]=="and" or prop[0]=="or"):
+        result.append(minimize(prop[1]))
+        return result
+    for p in prop:
+        r1 = (minimize(p))
+        result.append(r1)
+    return result
+
+'''This function modifies the output to make it in correct format'''	
+def removeBracket(prop):
+    result = []
+    if len(prop)==1:
+        if isinstance(prop[0],str):
+            result = "'"+prop[0]+"'"
+            return result
+        return prop[0]
+    for p in prop:
+        if isinstance(p,list) and len(p)==1 :
+            result.append(p[0])
+        else:		
+		    result.append(p)
+    return result
+            
+'''This function is to find CNF. All the relevant tasks are called from here'''
+def CNF(prop):
+    answer = ""
+    try:
+        answer1 = applyBiconditional(prop)
+        answer2 = applyImplies(answer1)
+        answer3 = applyDeMorgans(answer2)
+        answer4 = applyDoubleNegation(answer3)
+        answer5 = applyDistributive(answer4)
+        answer6 = applyAssociative(answer5)
+        answer7 = removeDuplicates(answer6)
+        answer8 = minimize(answer7)
+        answer9 = removeBracket(answer8)
+    except Exception:
+        answer = ""
+    else:
+        answer = answer9
+    finally:
+        return answer
+
+'''This part acts as the main. The input is read, passed to CNF Converter, and written into the output file'''
+import pdb
+pdb.set_trace()
+noOfTestCases = int (inputFile.readline())
+if noOfTestCases =="" or noOfTestCases == 0:
+    print "null"
+    inputFile.close()
+    sys.exit()
+if noOfTestCases > 0:
+    outputFile = open('sentences_CNF.txt', 'w+')
+    for i in range(0,noOfTestCases):
+        prop = eval(inputFile.readline())
+        output = CNF(prop)
+        print output
+        outputFile.write(''.join(format(output))+"\n")
+inputFile.close()
+outputFile.close()
+sys.exit()
