@@ -1,0 +1,2 @@
+# cnf
+conjunctive normal form
